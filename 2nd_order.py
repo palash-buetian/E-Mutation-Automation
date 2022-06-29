@@ -3,12 +3,12 @@
 
 import configparser
 import csv
-import datetime
 import os
 import re
 import socket
 import time
 from datetime import date
+import datetime
 
 from openpyxl import Workbook
 from openpyxl import load_workbook
@@ -18,11 +18,12 @@ from selenium.common.exceptions import NoSuchElementException
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import Select
+from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.support.ui import WebDriverWait
 
 # parse configuration file
 config = configparser.ConfigParser()
-config.read('config.ini')
+config.read('config.ini', encoding='utf-8')
 
 
 # print(chr(27) + "[2J")
@@ -39,7 +40,7 @@ def is_connected(hostname):
         return True
     except:
         pass
-    return False
+    return True
 
 
 def credentials():
@@ -52,10 +53,11 @@ def credentials():
 def prepare_browser():
     # create a browser_instance instance with infobar disabled and password manager disabled
     chrome_options = webdriver.ChromeOptions()
-    chrome_options.add_experimental_option("excludeSwitches", ['enable-automation'])
+    chrome_options.add_experimental_option("excludeSwitches", ['enable-automation', 'enable-logging'])
     prefs = {"credentials_enable_service": False, "profile.password_manager_enabled": False}
     chrome_options.add_experimental_option("prefs", prefs)
-    browser = webdriver.Chrome(os.getcwd() + '/venv/chromedriver', options=chrome_options)
+    browser = webdriver.Chrome(ChromeDriverManager().install(), options=chrome_options)
+    os.system('cls' if os.name == 'nt' else 'clear')
     # maximizing the browser_instance window make all the links visible.
     browser.maximize_window()
     return browser
@@ -64,6 +66,12 @@ def prepare_browser():
 def close_session():
     browser.stop_client()
     browser.quit()
+
+
+def wait_and_click_by_xpath(wait, xpath):
+    button = wait.until(EC.element_to_be_clickable((By.XPATH, xpath)))
+    # click the send send button finally
+    browser.execute_script("arguments[0].click();", button)
 
 
 def login(browser, credentials):
@@ -78,23 +86,24 @@ def login(browser, credentials):
 
     # try login
     browser.find_element_by_id('username').send_keys(username)
-    browser.find_element_by_id('password').send_keys(password)
-    browser.find_element_by_id('submit').click()
-
+    browser.find_element_by_id('password').send_keys(password)    
+    wait_and_click_by_xpath(wait, "//*[@id='loginBtn']")
+    current_url = browser.current_url
+    WebDriverWait(browser, 15).until(EC.url_changes(current_url))
+    
     # if login unsuccessful
     if browser.current_url != welcome_page:
         print('login error! ')
         close_session()
-        return False
+        #browser.get(welcome_page)
+        return True
     else:
         print("Login successful! ")
         return True
 
-
 def click_by_xpath(xpath):
     element = browser.find_element_by_xpath(xpath)
     browser.execute_script("arguments[0].click();", element)
-
 
 def click_by_linktext(linktext):
     element = browser.find_element_by_link_text(linktext)
@@ -199,12 +208,11 @@ def add_second_order(hearing_date):
     wait_and_click_by_xpath(wait, "//*[@id='add_order']")
 
     # # Sleep for 1s
-    time.sleep(1.5)
+    time.sleep(2)
 
     # # select the order with "কানুনগো/সার্ভেয়রের প্রতিবেদন ও শুনানির জন্য আদেশ", option id =23
     select = Select(browser.find_element_by_id('status-id'))
     select.select_by_value('23')
-
     # change hearing date by js
     js = '$(".date-picker").datepicker("setDate",' + f'"{hearing_date}"' + ');'
     browser.execute_script(js)
@@ -234,9 +242,7 @@ def check_notice_signature():
 
     # click the notice full page link within the tab
     wait_and_click_by_xpath(wait, "//*[@id='view_notice_link_id']")
-
-    time.sleep(2)
-
+    time.sleep(2.5)
     try:
         browser.find_element_by_xpath(
             "//*[@id='portlet_tab5']/div[2]/div/div/table/tbody/tr[10]/td[3]/div[1]/a")
@@ -278,8 +284,9 @@ def send():
 
     time.sleep(1)
     browser.find_element_by_id("users-tagged-receive-7").click()
+    time.sleep(0.5)
     browser.find_element_by_id("users-tagged-view-3").click()
-    browser.find_element_by_id("users-tagged-view-4").click()
+
     # Send button xpath
     send_button = wait.until(EC.element_to_be_clickable((By.XPATH, "//*[@id='submit-btn']")))
     # click the send send button finally
@@ -370,10 +377,6 @@ def show_info_in_terminal(details):
     print("----------------------------")
 
 
-def wait_and_click_by_xpath(wait, xpath):
-    button = wait.until(EC.element_to_be_clickable((By.XPATH, xpath)))
-    # click the send send button finally
-    browser.execute_script("arguments[0].click();", button)
 
 
 def notice_exists():
@@ -396,7 +399,7 @@ def add_notice():
     # notice_detail_button = wait.until(EC.element_to_be_clickable((By.XPATH, "//*[@id='view_notice_link_id']")))
     # browser_instance.execute_script("arguments[0].click();", notice_detail_button)
 
-    time.sleep(2)
+    time.sleep(1)
 
     # notice submit for the first time
     try:
@@ -414,7 +417,7 @@ def add_notice():
     except NoSuchElementException:
         button = wait.until(EC.element_to_be_clickable((By.LINK_TEXT, "নোটিশ/শুনানি")))
         browser.execute_script("arguments[0].click();", button)
-        wait_and_click_by_xpath(wait, "//*[@id='view_notice_link_id']")
+        wait_and_click_by_xpath(wait, "//*[@id='notice_submit_id']")
 
 
     # click the notice full page link within the tab
@@ -448,7 +451,10 @@ if is_connected("one.one.one.one"):
     if login(browser, credentials) is True:
 
         # Click নামজারি link
-        click_by_linktext("নামজারি")
+        wait_and_click_by_xpath(wait,"*//a[@data-s_id='2']/span")
+        
+        time.sleep(1)
+        browser.refresh()
 
         #  applications returned from ULAO list as sorted by application id as decending
         proposal_list = config.get('URLS', 'proposal_list').split(",")

@@ -4,6 +4,7 @@
 import configparser
 import csv
 import os
+import sys
 import re
 import socket
 import time
@@ -40,7 +41,7 @@ def is_connected(hostname):
         return True
     except:
         pass
-    return False
+    return True
 
 
 def credentials():
@@ -53,10 +54,11 @@ def credentials():
 def prepare_browser():
     # create a browser_instance instance with infobar disabled and password manager disabled
     chrome_options = webdriver.ChromeOptions()
-    chrome_options.add_experimental_option("excludeSwitches", ['enable-automation'])
+    chrome_options.add_experimental_option("excludeSwitches", ['enable-automation', 'enable-logging'])
     prefs = {"credentials_enable_service": False, "profile.password_manager_enabled": False}
     chrome_options.add_experimental_option("prefs", prefs)
-    browser = webdriver.Chrome(os.getcwd() + '/venv/chromedriver', options=chrome_options)
+    browser = webdriver.Chrome(ChromeDriverManager().install(), options=chrome_options)
+    os.system('cls' if os.name == 'nt' else 'clear')
     # maximizing the browser_instance window make all the links visible.
     browser.maximize_window()
     return browser
@@ -66,6 +68,10 @@ def close_session():
     browser.stop_client()
     browser.quit()
 
+def wait_and_click_by_xpath(wait, xpath):
+    button = wait.until(EC.element_to_be_clickable((By.XPATH, xpath)))
+    # click the send send button finally
+    browser.execute_script("arguments[0].click();", button)
 
 def login(browser, credentials):
     # land on login page
@@ -79,14 +85,17 @@ def login(browser, credentials):
 
     # try login
     browser.find_element_by_id('username').send_keys(username)
-    browser.find_element_by_id('password').send_keys(password)
-    browser.find_element_by_id('submit').click()
-
+    browser.find_element_by_id('password').send_keys(password)    
+    wait_and_click_by_xpath(wait, "//*[@id='loginBtn']")
+    current_url = browser.current_url
+    WebDriverWait(browser, 15).until(EC.url_changes(current_url))
+    
     # if login unsuccessful
     if browser.current_url != welcome_page:
         print('login error! ')
         close_session()
-        return False
+        #browser.get(welcome_page)
+        return True
     else:
         print("Login successful! ")
         return True
@@ -106,6 +115,10 @@ def new_case_found(processed=False):
     # open the acceptable application list page
     browser.get(acceptable_applications)
 
+    
+    
+    browser.refresh()
+    
     cases = len(browser.find_elements_by_xpath("//*[@id='sample_6']/tbody/tr"))
     # if there is no case, end here.
 
@@ -184,22 +197,22 @@ def add_first_order():
     # click on ckeditor to ensure order entry
     frame = browser.find_element(By.CLASS_NAME, 'cke_wysiwyg_frame')
     browser.switch_to.frame(frame)
-    time.sleep(2)
+    time.sleep(1)
     browser.switch_to.parent_frame()
     
     # to load the full order on ckeditor, wait three seconds
-    time.sleep(1)
+    time.sleep(0.5)
 
     # now click 'সংরক্ষণ' button to save the 1st order
     click_by_xpath("//*[@id='submit_order_btn']/button")
 
-    time.sleep(2.5)
+    time.sleep(0.5)
 
     # refresh the browser_instance to load all dynamically loaded elements as static.
-    browser.refresh()
+    #browser.refresh()
 
     # sleep for 2s
-    time.sleep(0.5)
+    #time.sleep(0.5)
 
     # signature modal link click
     #click_by_xpath("//*[@id='sample_6']/tbody/tr[1]/td[1]/div[1]/table/tbody[2]/tr[1]/td[2]/div[2]/a")
@@ -241,7 +254,7 @@ def send():
         "body > div.page-container > div.page-content-wrapper > div > div > div > div > div.portlet-title > div.actions > button")
     browser.execute_script("arguments[0].click();", popup_button)
 
-    time.sleep(1)
+    time.sleep(0.5)
     # Send button xpath
     send_button = wait.until(EC.element_to_be_clickable((By.XPATH, "//*[@id='submit-btn']")))
     # click the send send button finally
@@ -347,6 +360,9 @@ if is_connected("one.one.one.one"):
 
         # Click নামজারি link
         click_by_linktext("নামজারি")
+        
+        time.sleep(1)
+        browser.refresh()
 
         # acceptable application list as sorted by application id as decending
         acceptable_applications = config.get('URLS', 'acceptable_applications_page_asc')
@@ -368,7 +384,7 @@ if is_connected("one.one.one.one"):
 
                     # go to the first application details page
                     browser.get(details['application_details_page_url'])
-
+                                        
                     # check if there is any 1st order already.
                     if first_order_exists() is False:
                         # no first order, so add one.

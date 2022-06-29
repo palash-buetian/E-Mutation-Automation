@@ -1,17 +1,28 @@
-# coding=utf-8
-# import essential libraries
+
+
+import configparser
+import csv
 import os
+import sys
+import re
 import socket
 import time
-import configparser
+from datetime import date
+from webdriver_manager.chrome import ChromeDriverManager
+
+from openpyxl import Workbook
+from openpyxl import load_workbook
+from openpyxl.styles import Font, Alignment, Border, Side
 from selenium import webdriver
+from selenium.common.exceptions import NoSuchElementException
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.support.ui import Select
 from selenium.webdriver.support.ui import WebDriverWait
 
 # parse configuration file
 config = configparser.ConfigParser()
-config.read('config.ini')
+config.read('config.ini', encoding='utf-8')
 
 
 def is_connected(hostname):
@@ -36,17 +47,19 @@ def credentials():
     return {'username': username, 'password': password}
 
 
+
+
 def prepare_browser():
     # create a browser_instance instance with infobar disabled and password manager disabled
     chrome_options = webdriver.ChromeOptions()
-    chrome_options.add_experimental_option("excludeSwitches", ['enable-automation'])
+    chrome_options.add_experimental_option("excludeSwitches", ['enable-automation', 'enable-logging'])
     prefs = {"credentials_enable_service": False, "profile.password_manager_enabled": False}
     chrome_options.add_experimental_option("prefs", prefs)
-    browser = webdriver.Chrome(os.getcwd() + '/venv/chromedriver', options=chrome_options)
+    browser = webdriver.Chrome(ChromeDriverManager().install(), options=chrome_options)
+    os.system('cls' if os.name == 'nt' else 'clear')
     # maximizing the browser_instance window make all the links visible.
     browser.maximize_window()
     return browser
-
 
 def close_session():
     browser.stop_client()
@@ -140,6 +153,9 @@ if is_connected("one.one.one.one"):
 
         # Click নামজারি link
         click_by_linktext("নামজারি")
+                
+        time.sleep(1)
+        browser.refresh()
 
         # rejectable application list as sorted by application id as decending
         rejectable_applications_url = config.get('URLS', 'rejectable_applications_list')
@@ -165,7 +181,7 @@ if is_connected("one.one.one.one"):
 
                     # on the notice signature popup modal, first get the 'বাতিল' button
                     reject_button = wait.until(
-                        EC.element_to_be_clickable((By.XPATH, "//*[@id='portlet_tab1']/div[2]/button[4]")))
+                        EC.element_to_be_clickable((By.XPATH, "//*[@id='portlet_tab1']/div[2]/button[5]")))
                     # Click the 'বাতিল' button
                     browser.execute_script("arguments[0].click();", reject_button)
 
